@@ -10,8 +10,7 @@ const PromptManager = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [config, setConfig] = useState({
-    sheetId: '',
-    apiKey: ''
+    scriptUrl: ''
   });
   const [showConfig, setShowConfig] = useState(false);
 
@@ -23,16 +22,15 @@ const PromptManager = () => {
   });
 
   useEffect(() => {
-    const savedSheetId = localStorage.getItem('sheetId');
-    const savedApiKey = localStorage.getItem('apiKey');
-    if (savedSheetId && savedApiKey) {
-      setConfig({ sheetId: savedSheetId, apiKey: savedApiKey });
+    const savedScriptUrl = localStorage.getItem('scriptUrl');
+    if (savedScriptUrl) {
+      setConfig({ scriptUrl: savedScriptUrl });
     }
   }, []);
 
   const loadPrompts = async () => {
-    if (!config.sheetId || !config.apiKey) {
-      setError('Por favor configura el Sheet ID y API Key');
+    if (!config.scriptUrl) {
+      setError('Por favor configura la URL del Script');
       return;
     }
 
@@ -40,25 +38,13 @@ const PromptManager = () => {
     setError('');
 
     try {
-      const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/Prompts!A2:E?key=${config.apiKey}`;
-      const response = await fetch(url);
+      const response = await fetch(config.scriptUrl);
       
       if (!response.ok) {
         throw new Error('Error al cargar los prompts. Verifica tu configuración.');
       }
 
-      const data = await response.json();
-      const rows = data.values || [];
-      
-      const loadedPrompts = rows.map((row, index) => ({
-        id: index + 1,
-        title: row[0] || '',
-        category: row[1] || '',
-        prompt: row[2] || '',
-        tags: row[3] || '',
-        createdAt: row[4] || new Date().toISOString()
-      }));
-
+      const loadedPrompts = await response.json();
       setPrompts(loadedPrompts);
       setFilteredPrompts(loadedPrompts);
     } catch (err) {
@@ -69,30 +55,15 @@ const PromptManager = () => {
   };
 
   const saveToSheet = async (updatedPrompts) => {
-    if (!config.sheetId || !config.apiKey) {
-      setError('Por favor configura el Sheet ID y API Key');
+    if (!config.scriptUrl) {
+      setError('Por favor configura la URL del Script');
       return;
     }
 
     try {
-      const values = updatedPrompts.map(p => [
-        p.title,
-        p.category,
-        p.prompt,
-        p.tags,
-        p.createdAt
-      ]);
-
-      const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/Prompts!A2:E?valueInputOption=RAW&key=${config.apiKey}`;
-      
-      const response = await fetch(url, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          values: values
-        })
+      const response = await fetch(config.scriptUrl, {
+        method: 'POST',
+        body: JSON.stringify(updatedPrompts)
       });
 
       if (!response.ok) {
@@ -106,10 +77,10 @@ const PromptManager = () => {
   };
 
   useEffect(() => {
-    if (config.sheetId && config.apiKey) {
+    if (config.scriptUrl) {
       loadPrompts();
     }
-  }, [config.sheetId, config.apiKey]);
+  }, [config.scriptUrl]);
 
   useEffect(() => {
     const filtered = prompts.filter(prompt =>
@@ -122,8 +93,7 @@ const PromptManager = () => {
   }, [searchTerm, prompts]);
 
   const handleSaveConfig = () => {
-    localStorage.setItem('sheetId', config.sheetId);
-    localStorage.setItem('apiKey', config.apiKey);
+    localStorage.setItem('scriptUrl', config.scriptUrl);
     setShowConfig(false);
     loadPrompts();
   };
@@ -194,50 +164,43 @@ const PromptManager = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
         <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-xl p-6">
-          <h2 className="text-2xl font-bold mb-6 text-gray-800">Configuración de Google Sheets</h2>
+          <h2 className="text-2xl font-bold mb-6 text-gray-800">Configuración</h2>
           
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Google Sheets ID
+                URL del Google Apps Script
               </label>
               <input
                 type="text"
-                value={config.sheetId}
-                onChange={(e) => setConfig({...config, sheetId: e.target.value})}
-                placeholder="ID de tu Google Sheet"
+                value={config.scriptUrl}
+                onChange={(e) => setConfig({scriptUrl: e.target.value})}
+                placeholder="https://script.google.com/macros/s/..."
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
               <p className="text-xs text-gray-500 mt-1">
-                Lo encuentras en la URL: docs.google.com/spreadsheets/d/[SHEET_ID]/edit
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Google API Key
-              </label>
-              <input
-                type="password"
-                value={config.apiKey}
-                onChange={(e) => setConfig({...config, apiKey: e.target.value})}
-                placeholder="Tu API Key de Google"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Créala en Google Cloud Console con acceso a Google Sheets API
+                La URL que obtuviste al implementar el Apps Script
               </p>
             </div>
 
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
               <p className="text-sm text-yellow-800 font-medium mb-2">Instrucciones:</p>
               <ol className="text-xs text-yellow-700 space-y-1 list-decimal list-inside">
-                <li>Crea un Google Sheet con una hoja llamada "Prompts"</li>
-                <li>En la fila 1 pon: Title | Category | Prompt | Tags | Created At</li>
-                <li>Haz el sheet público o comparte con la API key</li>
-                <li>Habilita Google Sheets API en Google Cloud Console</li>
-                <li>Crea una API Key y pégala aquí</li>
+                <li>Abre tu Google Sheet</li>
+                <li>Ve a: Extensiones → Apps Script</li>
+                <li>Borra todo y pega el código proporcionado</li>
+                <li>Clic en: Implementar → Nueva implementación</li>
+                <li>Tipo: Aplicación web</li>
+                <li>Quién tiene acceso: Cualquier usuario</li>
+                <li>Clic en Implementar y autoriza</li>
+                <li>Copia la URL y pégala aquí arriba</li>
               </ol>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-xs text-blue-700">
+                <strong>Nota:</strong> Este método es más seguro y permite lectura y escritura sin hacer tu Google Sheet completamente público.
+              </p>
             </div>
 
             <div className="flex gap-3">
